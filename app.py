@@ -1,49 +1,99 @@
+# Beispielcode zur Integration des neuen PDF-Exports im Streamlit-Tool
 
-# app.py – Sanierungstool v2 FINAL
-# (Inklusive Diagramm, PDF-Export und LA-Branding)
-
-import streamlit as st
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
 import matplotlib.pyplot as plt
-import tempfile
+import pandas as pd
+from fpdf import FPDF
+from datetime import datetime
 import os
 
-# Branding
-st.image("logo.png", width=150)
-st.title("LA Sanierungen – KI-Sanierungsfahrplan")
+class PDF(FPDF):
+    def header(self):
+        if os.path.exists("logo.png"):
+            self.image("logo.png", 170, 8, 30)
+        self.set_font("Arial", 'B', 14)
+        self.cell(0, 10, 'Sanierungsfahrplan', ln=True, align='L')
+        self.set_font("Arial", '', 10)
+        self.cell(0, 10, f'Erstellt am: {datetime.now().strftime("%d.%m.%Y")}', ln=True, align='L')
+        self.ln(5)
 
-# Eingabemaske
-adresse = st.text_input("Adresse", "")
-baujahr = st.number_input("Baujahr", 1900, 2025, 1970)
-wohnflaeche = st.number_input("Wohnfläche (m²)", 50, 1000, 120)
-stromverbrauch = st.number_input("Stromverbrauch (kWh/Jahr)", 500, 10000, 3000)
-gasverbrauch = st.number_input("Gasverbrauch (kWh/Jahr)", 500, 20000, 9000)
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Seite {self.page_no()}', 0, 0, 'C')
 
-ziel = st.selectbox("Fokus Ihrer Sanierung", ["CO₂-Reduktion", "Kosten sparen", "Effizienz erhöhen"])
+    def chapter_title(self, title):
+        self.set_font('Arial', 'B', 12)
+        self.cell(0, 10, title, 0, 1, 'L')
+        self.ln(2)
 
-# Auswertung
-if st.button("Analyse starten"):
-    # Platzhalter-Ausgabe
-    st.success("Sanierungsanalyse abgeschlossen!")
+    def chapter_body(self, body):
+        self.set_font('Arial', '', 10)
+        self.multi_cell(0, 10, body)
+        self.ln()
 
-    # Diagramm
+    def add_table(self, data, col_widths):
+        self.set_font("Arial", size=10)
+        for i, row in enumerate(data):
+            for j, datum in enumerate(row):
+                self.cell(col_widths[j], 10, str(datum), border=1)
+            self.ln()
+
+    def add_image(self, image_path, x=10, y=None, w=180):
+        self.image(image_path, x, y, w)
+
+def create_diagram(einsparung):
     fig, ax = plt.subplots()
-    ax.bar(["Strom", "Gas"], [stromverbrauch, gasverbrauch], color=["skyblue", "orange"])
-    ax.set_title("Aktueller Energieverbrauch")
-    st.pyplot(fig)
+    jahre = list(einsparung.keys())
+    werte = list(einsparung.values())
+    ax.bar(jahre, werte)
+    ax.set_title('CO2-Einsparung pro Jahr')
+    ax.set_ylabel('kg CO2')
+    plt.tight_layout()
+    diagramm_path = "diagramm.png"
+    plt.savefig(diagramm_path)
+    plt.close()
+    return diagramm_path
 
-    # PDF Export
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_file:
-        c = canvas.Canvas(pdf_file.name, pagesize=A4)
-        c.drawImage("logo.png", 40, 750, width=100, preserveAspectRatio=True)
-        c.drawString(150, 800, "Sanierungsfahrplan – LA Sanierungen")
-        c.drawString(40, 730, f"Adresse: {adresse}")
-        c.drawString(40, 710, f"Baujahr: {baujahr}")
-        c.drawString(40, 690, f"Wohnfläche: {wohnflaeche} m²")
-        c.drawString(40, 670, f"Strom: {stromverbrauch} kWh, Gas: {gasverbrauch} kWh")
-        c.drawString(40, 650, f"Fokus: {ziel}")
-        c.drawString(40, 620, "→ Maßnahmenempfehlung & Förderung folgen…")
-        c.save()
-        with open(pdf_file.name, "rb") as f:
-            st.download_button("📄 PDF herunterladen", f, file_name="Sanierungsplan.pdf")
+def export_full_report(adresse, daten):
+    pdf = PDF()
+    pdf.add_page()
+
+    # Deckblatt
+    pdf.chapter_title(f"Sanierungsfahrplan für: {adresse}")
+    pdf.chapter_body("Individuell KI-generiert, übersichtlich, förderfähig.")
+
+    # Zusammenfassung
+    pdf.chapter_title("Zusammenfassung")
+    pdf.chapter_body("Diese Seite enthält eine Übersicht der Sanierungsziele und Kernmetriken.")
+    pdf.add_table([
+        ["Energiekosten vorher", "Energiekosten nachher", "CO2-Ersparnis", "Förderanteil"],
+        ["2.800 €/Jahr", "1.100 €/Jahr", "5.200 kg", "30%"]
+    ], [50, 50, 45, 45])
+
+    # Jahresplan
+    pdf.chapter_title("Sanierungsfahrplan - Zeitlicher Ablauf")
+    jahresplan = [
+        ["2024", "Dachdämmung", "12.000 €", "BEG EM 20%", "2.300 kg"],
+        ["2025", "Wärmepumpe + Fenster", "25.000 €", "KfW 261 30%", "4.500 kg"],
+        ["2026", "PV-Anlage", "8.000 €", "KfW 270 10%", "n/a"]
+    ]
+    pdf.add_table([
+        ["Jahr", "Maßnahme", "Kosten", "Förderung", "CO2-Ersparnis"]
+    ] + jahresplan, [20, 60, 30, 40, 40])
+
+    # Diagramm einfügen
+    einsparung = {"2024": 2300, "2025": 4500}
+    diagramm = create_diagram(einsparung)
+    pdf.add_page()
+    pdf.chapter_title("Diagramm: CO2-Einsparung")
+    pdf.add_image(diagramm)
+
+    # Hinweis
+    pdf.add_page()
+    pdf.chapter_title("Hinweis")
+    pdf.chapter_body("Dieses Dokument dient zur Unterstützung bei Förderanträgen. Alle Angaben ohne Gewähr. Für verbindliche Daten konsultieren Sie bitte einen Energieberater.")
+
+    # Speichern
+    filename = f"Sanierungsfahrplan_{adresse.replace(' ', '_')}.pdf"
+    pdf.output(filename)
+    return filename
