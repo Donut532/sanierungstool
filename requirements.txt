@@ -1,6 +1,0 @@
-streamlit
-openai
-pandas
-reportlab
-matplotlib
-fpdf
