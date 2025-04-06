@@ -111,13 +111,14 @@ if abgeschickt:
         pdf_bytes = pdf.output(dest='S').encode('latin1')
         return io.BytesIO(pdf_bytes)
     
-    # PDF-Puffer im Session-State speichern
+    # PDF erstellen und im Session-State speichern, dann neu laden
     if st.button("📄 PDF erstellen"):
         st.session_state.pdf_buffer = create_pdf(
             st.session_state.analyse_text,
             st.session_state.diagramm_data,
             adresse, baujahr, wohnfläche
         )
+        st.experimental_rerun()
 
 if "pdf_buffer" in st.session_state:
     st.download_button("📥 PDF herunterladen", st.session_state.pdf_buffer, file_name="Sanierungsfahrplan.pdf")
